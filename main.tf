@@ -1,53 +1,43 @@
-resource "aws_s3_bucket" "bucket" {
-  bucket_prefix = "${var.prefix}-${var.name}"
+resource "google_cloud_run_service" "frontend_service" {
+  name     = "${var.envrioment}-frontend-service"
+  location = "europe-west2"
 
-  force_destroy = true
-}
-
-resource "aws_s3_bucket_website_configuration" "bucket" {
-  bucket = aws_s3_bucket.bucket.id
-
-  index_document {
-    suffix = "index.html"
-  }
-
-  error_document {
-    key = "error.html"
-  }
-}
-
-resource "aws_s3_bucket_acl" "bucket" {
-  bucket = aws_s3_bucket.bucket.id
-
-  acl = "public-read"
-}
-
-resource "aws_s3_bucket_policy" "policy" {
-  bucket = aws_s3_bucket.bucket.id
-  policy = <<EOF
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "PublicReadGetObject",
-            "Effect": "Allow",
-            "Principal": "*",
-            "Action": [
-                "s3:GetObject"
-            ],
-            "Resource": [
-                "arn:aws:s3:::${aws_s3_bucket.bucket.id}/*"
-            ]
+  template {
+    spec {
+      containers {
+        image = "europe-west2-docker.pkg.dev/acme-corp-371520/acme/frontend:${var.docker_tag}"
+        ports {
+            container_port =  80
         }
-    ]
-}
-EOF
+      }
+    }
+
+    metadata {
+      annotations = {
+        "autoscaling.knative.dev/maxScale"      = "100"
+        "autoscaling.knative.dev/minScale"      = var.min_scale
+      }
+    }
+  }
+
+  traffic {
+    percent         = 100
+    latest_revision = true
+  }
 }
 
-resource "aws_s3_object" "webapp" {
-  acl          = "public-read"
-  key          = "index.html"
-  bucket       = aws_s3_bucket.bucket.id
-  content      = file("${path.module}/assets/index.html")
-  content_type = "text/html"
+data "google_iam_policy" "noauth" {
+  binding {
+    role = "roles/run.invoker"
+    members = [
+      "allUsers",
+    ]
+  }
+}
+
+resource "google_cloud_run_service_iam_policy" "noauth" {
+  location    = google_cloud_run_service.frontend_service.location
+  project     = google_cloud_run_service.frontend_service.project
+  service     = google_cloud_run_service.frontend_service.name
+  policy_data = data.google_iam_policy.noauth.policy_data
 }
