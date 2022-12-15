@@ -1,3 +1,3 @@
-output "endpoint" {
-  value = aws_s3_bucket_website_configuration.bucket.website_endpoint
+output "frontend_url" {
+  value = google_cloud_run_service.frontend_service.status[0].url
 }
